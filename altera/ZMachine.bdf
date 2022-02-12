@@ -191,40 +191,6 @@ applicable agreement for further details.
 )
 (pin
 	(output)
-	(rect 560 512 736 528)
-	(text "OUTPUT" (rect 1 0 39 10)(font "Arial" (font_size 6)))
-	(text "A18" (rect 90 0 108 11)(font "Arial" ))
-	(pt 0 8)
-	(drawing
-		(line (pt 0 8)(pt 52 8))
-		(line (pt 52 4)(pt 78 4))
-		(line (pt 52 12)(pt 78 12))
-		(line (pt 52 12)(pt 52 4))
-		(line (pt 78 4)(pt 82 8))
-		(line (pt 82 8)(pt 78 12))
-		(line (pt 78 12)(pt 82 8))
-	)
-	(annotation_block (location)(rect 736 528 792 544))
-)
-(pin
-	(output)
-	(rect 560 496 736 512)
-	(text "OUTPUT" (rect 1 0 39 10)(font "Arial" (font_size 6)))
-	(text "A17" (rect 90 0 108 11)(font "Arial" ))
-	(pt 0 8)
-	(drawing
-		(line (pt 0 8)(pt 52 8))
-		(line (pt 52 4)(pt 78 4))
-		(line (pt 52 12)(pt 78 12))
-		(line (pt 52 12)(pt 52 4))
-		(line (pt 78 4)(pt 82 8))
-		(line (pt 82 8)(pt 78 12))
-		(line (pt 78 12)(pt 82 8))
-	)
-	(annotation_block (location)(rect 736 512 792 528))
-)
-(pin
-	(output)
 	(rect 296 120 472 136)
 	(text "OUTPUT" (rect 1 0 39 10)(font "Arial" (font_size 6)))
 	(text "romOE" (rect 90 0 124 11)(font "Arial" ))
@@ -503,20 +469,6 @@ applicable agreement for further details.
 		(line (pt 200 160)(pt 184 160))
 	)
 	(port
-		(pt 200 240)
-		(output)
-		(text "a17" (rect 0 0 17 11)(font "Arial" ))
-		(text "a17" (rect 165 235 182 246)(font "Arial" ))
-		(line (pt 200 240)(pt 184 240))
-	)
-	(port
-		(pt 200 256)
-		(output)
-		(text "a18" (rect 0 0 17 11)(font "Arial" ))
-		(text "a18" (rect 165 251 182 262)(font "Arial" ))
-		(line (pt 200 256)(pt 184 256))
-	)
-	(port
 		(pt 200 32)
 		(bidir)
 		(text "data[7..0]" (rect 0 0 47 11)(font "Arial" ))
@@ -594,16 +546,8 @@ applicable agreement for further details.
 	(pt 536 424)
 )
 (connector
-	(pt 536 504)
-	(pt 560 504)
-)
-(connector
 	(pt 280 128)
 	(pt 280 200)
-)
-(connector
-	(pt 536 520)
-	(pt 560 520)
 )
 (connector
 	(pt -200 264)

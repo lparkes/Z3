@@ -1,4 +1,4 @@
-module boss(clk, reset, data, waddress, we, pe, romCS, ramCS, led0, led1, led2, a17, a18);
+module boss(clk, reset, data, waddress, we, pe, romCS, ramCS, led0, led1, led2);
 
 input clk;
 input reset;
@@ -13,15 +13,11 @@ output ramCS;
 output led0;
 output led1;
 output led2;
-output a17;
-output a18;
 
 reg [16:0] address;
 reg [7:0] dataOut;
 reg printEnable;
 reg writeEnable;
-reg a17;
-reg a18;
 
 wire [16:0] waddress;
 wire we;
@@ -87,7 +83,6 @@ wire led2;
 `define OP0_NEWLINE	'hB
 `define OP0_SHOWSTATUS	'hC
 `define OP0_VERIFY	'hD
-`define OP0_DYNAMIC	'hF	// FIXME
 
 `define OP1_JZ		'h0
 `define OP1_GETSIBLING 'h1
@@ -97,7 +92,6 @@ wire led2;
 `define OP1_INC		'h5
 `define OP1_DEC		'h6
 `define OP1_PRINTADDR 'h7
-`define OP1_SWITCHBANK 'h8	// FIXME
 `define OP1_REMOVEOBJ 'h9
 `define OP1_PRINTOBJ 'hA
 `define OP1_RET		'hB
@@ -184,7 +178,6 @@ reg [15:0] random;
 
 reg [1:0] alphabet;
 reg [1:0] long;
-reg nextLoadIsDynamic;
 
 reg [7:0] cachedReg;
 reg [15:0] cachedValue;
@@ -207,9 +200,6 @@ begin
 	printEnable=0;
 	phase=0;
 	readHigh=0;
-	nextLoadIsDynamic=0;
-	a17=0;
-	a18=0;
 	cachedReg=0;
 	cachedValue=0;
 end
@@ -231,7 +221,7 @@ assign led2 = !address[14];
 task StoreB;
 	begin
 		if (phase==0) begin
-			cachedReg<=15; nextLoadIsDynamic<=0; address<=operand[0]+operand[1]; writeEnable<=1; dataOut<=operand[2][7:0]; phase<=phase+1;
+			cachedReg<=15; address<=operand[0]+operand[1]; writeEnable<=1; dataOut<=operand[2][7:0]; phase<=phase+1;
 		end else begin
 			address<=pc; writeEnable<=0; state<=`STATE_FETCH_OP;
 		end
@@ -241,7 +231,7 @@ endtask
 task StoreW;
 	begin
 		case (phase)
-			0: begin cachedReg<=15; nextLoadIsDynamic<=0; address<=operand[0]+operand[1]*2; writeEnable<=1; dataOut<=operand[2][15:8]; phase<=phase+1; end
+			0: begin cachedReg<=15; address<=operand[0]+operand[1]*2; writeEnable<=1; dataOut<=operand[2][15:8]; phase<=phase+1; end
 			1: begin address<=address+1; dataOut<=operand[2][7:0]; phase<=phase+1; end
 			default: begin address<=pc; writeEnable<=0; state<=`STATE_FETCH_OP; end
 		endcase
@@ -342,8 +332,7 @@ task LoadAndStore;
 	begin
 		if (phase==0) begin
 			store<=data;
-			forceDynamicRead<=nextLoadIsDynamic;
-			nextLoadIsDynamic<=0;
+			forceDynamicRead<=0;
 			address<=loadAddress;
 			temp[7:0]<=0;
 			phase<=word?phase+1:2;
@@ -726,7 +715,6 @@ task DoOp;
 					`OP1_INC: StoreResult(operand[0]+1);
 					`OP1_DEC: StoreResult(operand[0]-1);
 					`OP1_PRINTADDR: Print(operand[0], `PRINTEFFECT_FETCH);
-					`OP1_SWITCHBANK: begin a17<=operand[0][0]; a18<=operand[0][1]; state<=`STATE_RESET; end
 					`OP1_REMOVEOBJ: begin operNum<=`OP_2; op<=`OP2_INSERTOBJ; operand[1]<=0; end
 					`OP1_PRINTOBJ: PrintObj();
 					`OP1_RET: ReturnFunction(operand[0]);
@@ -1007,8 +995,6 @@ begin
 			$display("Fetching op at %h", pc);
 			if (!reset) begin
 				state<=`STATE_RESET;
-				a17<=0;
-				a18<=0;
 			end else begin
 				case (data[7:6])
 					2'b10: begin
@@ -1021,7 +1007,6 @@ begin
 							case (data[3:0])
 								`OP0_POP: begin cachedReg<=15; stackAddress<=stackAddress-1; end
 								`OP0_NOP: begin /*nop*/ end
-								`OP0_DYNAMIC: nextLoadIsDynamic<=1;
 								`OP0_SAVE,`OP0_RESTORE,`OP0_VERIFY: state<=`STATE_READ_BRANCH;
 								default: state<=`STATE_DO_OP;
 							endcase
@@ -1391,8 +1376,6 @@ wire ramCS;
 wire led0;
 wire led1;
 wire led2;
-wire a17;
-wire a18;
 
 integer file,readData,i,j,numOps,cycles,stateCycles[15:0],opCycles[255:0],ops[255:0];
 integer touch,touchX, touchY, touchZ;
@@ -1479,6 +1462,6 @@ begin
 	$finish;
 end
 
-boss b(clk, reset, data, address, writeEnable, printEnable, romCS, ramCS, led0, led1, led2, a17, a18);
+boss b(clk, reset, data, address, writeEnable, printEnable, romCS, ramCS, led0, led1, led2);
 
 endmodule

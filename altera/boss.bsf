@@ -94,20 +94,6 @@ applicable agreement for further details.
 		(line (pt 200 160)(pt 184 160))
 	)
 	(port
-		(pt 200 240)
-		(output)
-		(text "a17" (rect 0 0 17 11)(font "Arial" ))
-		(text "a17" (rect 165 235 182 246)(font "Arial" ))
-		(line (pt 200 240)(pt 184 240))
-	)
-	(port
-		(pt 200 256)
-		(output)
-		(text "a18" (rect 0 0 17 11)(font "Arial" ))
-		(text "a18" (rect 165 251 182 262)(font "Arial" ))
-		(line (pt 200 256)(pt 184 256))
-	)
-	(port
 		(pt 200 32)
 		(bidir)
 		(text "data[7..0]" (rect 0 0 47 11)(font "Arial" ))
