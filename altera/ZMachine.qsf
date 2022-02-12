@@ -88,7 +88,6 @@ set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 
 set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
 set_location_assignment PIN_43 -to PE
 set_location_assignment PIN_63 -to ramCS
-set_location_assignment PIN_120 -to romCS
 set_global_assignment -name SDC_FILE zmachine.sdc
 set_global_assignment -name CYCLONEII_OPTIMIZATION_TECHNIQUE AREA
 set_global_assignment -name SMART_RECOMPILE ON
@@ -97,18 +96,10 @@ set_global_assignment -name AUTO_SHIFT_REGISTER_RECOGNITION ALWAYS
 set_location_assignment PIN_3 -to led0
 set_location_assignment PIN_7 -to led1
 set_location_assignment PIN_9 -to led2
-set_location_assignment PIN_143 -to A18
-set_location_assignment PIN_118 -to A17
 set_location_assignment PIN_119 -to romOE
 set_location_assignment PIN_51 -to ramCE2
 set_location_assignment PIN_59 -to ramOE
-set_location_assignment PIN_41 -to lcdCS
-set_location_assignment PIN_40 -to lcdReset
-set_location_assignment PIN_42 -to lcdRS
 set_location_assignment PIN_44 -to lcdRD
-set_location_assignment PIN_45 -to nadcCS
-set_location_assignment PIN_47 -to adcDout
-set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to adcDout
 set_global_assignment -name QIP_FILE altpll0.qip
 set_location_assignment PIN_144 -to reset
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to reset

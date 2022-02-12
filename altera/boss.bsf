@@ -59,13 +59,6 @@ applicable agreement for further details.
 		(line (pt 200 80)(pt 184 80))
 	)
 	(port
-		(pt 200 96)
-		(output)
-		(text "romCS" (rect 0 0 34 11)(font "Arial" ))
-		(text "romCS" (rect 151 91 185 102)(font "Arial" ))
-		(line (pt 200 96)(pt 184 96))
-	)
-	(port
 		(pt 200 112)
 		(output)
 		(text "ramCS" (rect 0 0 34 11)(font "Arial" ))

@@ -106,23 +106,6 @@ applicable agreement for further details.
 )
 (pin
 	(output)
-	(rect 560 352 736 368)
-	(text "OUTPUT" (rect 1 0 39 10)(font "Arial" (font_size 6)))
-	(text "romCS" (rect 90 0 124 11)(font "Arial" ))
-	(pt 0 8)
-	(drawing
-		(line (pt 0 8)(pt 52 8))
-		(line (pt 52 4)(pt 78 4))
-		(line (pt 52 12)(pt 78 12))
-		(line (pt 52 12)(pt 52 4))
-		(line (pt 78 4)(pt 82 8))
-		(line (pt 82 8)(pt 78 12))
-		(line (pt 78 12)(pt 82 8))
-	)
-	(annotation_block (location)(rect 736 368 792 384))
-)
-(pin
-	(output)
 	(rect 560 336 736 352)
 	(text "OUTPUT" (rect 1 0 39 10)(font "Arial" (font_size 6)))
 	(text "PE" (rect 90 0 104 11)(font "Arial" ))
@@ -434,13 +417,6 @@ applicable agreement for further details.
 		(line (pt 200 80)(pt 184 80))
 	)
 	(port
-		(pt 200 96)
-		(output)
-		(text "romCS" (rect 0 0 34 11)(font "Arial" ))
-		(text "romCS" (rect 151 91 185 102)(font "Arial" ))
-		(line (pt 200 96)(pt 184 96))
-	)
-	(port
 		(pt 200 112)
 		(output)
 		(text "ramCS" (rect 0 0 34 11)(font "Arial" ))
@@ -524,10 +500,6 @@ applicable agreement for further details.
 (connector
 	(pt 560 344)
 	(pt 536 344)
-)
-(connector
-	(pt 560 360)
-	(pt 536 360)
 )
 (connector
 	(pt 560 376)

@@ -1,4 +1,4 @@
-module boss(clk, reset, data, waddress, we, pe, romCS, ramCS, led0, led1, led2);
+module boss(clk, reset, data, waddress, we, pe, ramCS, led0, led1, led2);
 
 input clk;
 input reset;
@@ -8,7 +8,6 @@ inout [7:0] data;
 output [16:0] waddress;
 output we;
 output pe;
-output romCS;
 output ramCS;
 output led0;
 output led1;
@@ -22,7 +21,6 @@ reg writeEnable;
 wire [16:0] waddress;
 wire we;
 wire pe;
-wire romCS;
 wire ramCS;
 wire led0;
 wire led1;
@@ -141,8 +139,6 @@ wire led2;
 `define PRINTEFFECT_RET1		2
 `define PRINTEFFECT_ABBREVRET	3
 
-reg forceDynamicRead;
-
 reg [3:0] state;
 reg [3:0] phase;
 
@@ -193,7 +189,6 @@ reg [15:0] cachedValue;
 initial
 begin
 	state=`STATE_RESET;
-	forceDynamicRead=0;
 	writeEnable=0;
 	printEnable=0;
 	phase=0;
@@ -208,8 +203,7 @@ assign waddress[1] = address[1];
 assign data[5:0] = (writeEnable || printEnable)?dataOut[5:0]:6'bZ;
 assign data[6] = (writeEnable || printEnable)?dataOut[6]:'bZ;
 assign data[7] = (writeEnable || printEnable)?dataOut[7]:'bZ;
-assign romCS = !(!printEnable && !writeEnable && !forceDynamicRead && address[16]==1);
-assign ramCS = !(!printEnable && (writeEnable || forceDynamicRead || address[16]==0));
+assign ramCS = !(!printEnable && (writeEnable || address[16]==0));
 assign pe = (!printEnable || !clk);
 assign we = !writeEnable;
 assign led0 = !address[12];
@@ -330,7 +324,6 @@ task LoadAndStore;
 	begin
 		if (phase==0) begin
 			store<=data;
-			forceDynamicRead<=0;
 			address<=loadAddress;
 			temp[7:0]<=0;
 			phase<=word?phase+1:2;
@@ -339,7 +332,6 @@ task LoadAndStore;
 			address<=address+1;
 			phase<=phase+1;
 		end else begin
-			forceDynamicRead<=0;
 			StoreResultSlow((temp[7:0]<<8)|data);
 		end
 	end
@@ -526,7 +518,6 @@ task Pull;
 		case (phase)
 			0: begin
 				address<=2*(stackAddress-1);
-				forceDynamicRead<=1;
 				phase<=phase+1;
 			end
 			1: begin
@@ -536,7 +527,6 @@ task Pull;
 				phase<=phase+1;
 			end
 			default: begin
-				forceDynamicRead<=0;
 				if (return) begin
 					ReturnFunction((temp[7:0]<<8)|data);
 				end else begin
@@ -928,14 +918,13 @@ begin
 		end
 		`STATE_RET_FUNCTION: begin
 			case (phase)
-				0: begin csStack<=csStack-38; address<=csStack-38; forceDynamicRead<=1; phase<=phase+1; end
+				0: begin csStack<=csStack-38; address<=csStack-38; phase<=phase+1; end
 				1: begin pc[16]<=data[0]; negate<=data[1]; delayedBranch<=data[2]; address<=address+1; phase<=phase+1; end
 				2: begin pc[15:8]<=data; address<=address+1; phase<=phase+1; end
 				3: begin pc[7:0]<=data; address<=address+1; phase<=phase+1; end
 				4: begin stackAddress[15:8]<=data; address<=address+1; phase<=phase+1; end
 				5: begin stackAddress[7:0]<=data; address<=address+1; phase<=phase+1; end
 				default: begin
-					forceDynamicRead<=0;
 					cachedReg<=15;
 					if (negate) begin
 						phase<=0;
@@ -1096,7 +1085,6 @@ begin
 								end else begin
 									address<=csStack+8+2*(data-1);
 								end
-								forceDynamicRead<=1;	
 								phase<=phase+1;
 							end
 						end
@@ -1106,7 +1094,6 @@ begin
 							phase<=phase+1;
 						end
 						default: begin
-							forceDynamicRead<=0;
 							operand[operandIdx]<=operand[operandIdx]|data;
 							address<=pc+1;
 							operandIdx<=operandIdx+1;
@@ -1134,7 +1121,6 @@ begin
 					end else begin
 						address<=csStack+8+2*(operand[0]-1);
 					end
-					forceDynamicRead<=1;
 					phase<=phase+1;
 				end
 				1: begin
@@ -1143,7 +1129,6 @@ begin
 					phase<=phase+1;
 				end
 				default: begin
-					forceDynamicRead<=0;
 					operand[0][7:0]<=data;
 					if (op[4:0]==`OP1_LOAD)
 						state<=`STATE_READ_STORE;
@@ -1368,7 +1353,6 @@ wire [7:0] data;
 wire [16:0] address;
 wire writeEnable;
 wire printEnable;
-wire romCS;
 wire ramCS;
 wire led0;
 wire led1;
@@ -1379,7 +1363,7 @@ integer touch,touchX, touchY, touchZ;
 reg [7:0] mem [128*1024:0];
 reg [7:0] dynamicMem [128*1024:0];
 
-assign data=(!romCS ? mem[address] : (!ramCS ? (!writeEnable ? 8'bZ : dynamicMem[address] ) : 8'bZ ) );
+assign data= !ramCS ? (!writeEnable ? 8'bZ : dynamicMem[address] ) : 8'bZ;
 
 initial
 begin
@@ -1427,7 +1411,7 @@ begin
 			end
 			stateCycles[b.state]=stateCycles[b.state]+1;
 		end
-		$display("Mem req: %h WE:%d PE:%d RoS:%d RaS:%d D:%h LEDs:%d%d%d Ops:%d/%d", address, !writeEnable, printEnable, !romCS, !ramCS, data, !led0, !led1, !led2, numOps, cycles);
+		$display("Mem req: %h WE:%d PE:%d RaS:%d D:%h LEDs:%d%d%d Ops:%d/%d", address, !writeEnable, printEnable, !ramCS, data, !led0, !led1, !led2, numOps, cycles);
 	end
 	for (i=0; i<16; i=i+1)
 		if (stateCycles[i]>0)
@@ -1459,6 +1443,6 @@ begin
 	$finish;
 end
 
-boss b(clk, reset, data, address, writeEnable, printEnable, romCS, ramCS, led0, led1, led2);
+boss b(clk, reset, data, address, writeEnable, printEnable, ramCS, led0, led1, led2);
 
 endmodule
