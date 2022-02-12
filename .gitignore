@@ -1,3 +1,7 @@
 *.z3
 *.dat
 *.out
+altera/db/
+altera/incremental_db/
+altera/output_files/
+altera/simulation

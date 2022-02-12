@@ -1,7 +1,6 @@
-module boss(clk, adcDout, reset, data, waddress, we, pe, romCS, ramCS, led0, led1, led2, lcdCS, lcdRS, lcdReset, nadcCS, a17, a18);
+module boss(clk, reset, data, waddress, we, pe, romCS, ramCS, led0, led1, led2, a17, a18);
 
 input clk;
-input adcDout;
 input reset;
 
 inout [7:0] data;
@@ -14,10 +13,6 @@ output ramCS;
 output led0;
 output led1;
 output led2;
-output lcdCS;
-output lcdRS;
-output lcdReset;
-output nadcCS;
 output a17;
 output a18;
 
@@ -25,9 +20,6 @@ reg [16:0] address;
 reg [7:0] dataOut;
 reg printEnable;
 reg writeEnable;
-reg rlcdRS;
-reg rlcdReset;
-reg adcCS;
 reg a17;
 reg a18;
 
@@ -39,10 +31,6 @@ wire ramCS;
 wire led0;
 wire led1;
 wire led2;
-wire lcdCS;
-wire lcdRS;
-wire lcdReset;
-wire nadcCS;
 
 
 //`define HARDWARE_PRINT
@@ -99,7 +87,7 @@ wire nadcCS;
 `define OP0_NEWLINE	'hB
 `define OP0_SHOWSTATUS	'hC
 `define OP0_VERIFY	'hD
-`define OP0_DYNAMIC	'hF
+`define OP0_DYNAMIC	'hF	// FIXME
 
 `define OP1_JZ		'h0
 `define OP1_GETSIBLING 'h1
@@ -109,7 +97,7 @@ wire nadcCS;
 `define OP1_INC		'h5
 `define OP1_DEC		'h6
 `define OP1_PRINTADDR 'h7
-`define OP1_SWITCHBANK 'h8
+`define OP1_SWITCHBANK 'h8	// FIXME
 `define OP1_REMOVEOBJ 'h9
 `define OP1_PRINTOBJ 'hA
 `define OP1_RET		'hB
@@ -142,7 +130,6 @@ wire nadcCS;
 `define OP2_MUL		'h16
 `define OP2_DIV		'h17
 `define OP2_MOD		'h18
-`define OP2_WRITEREG 'h1E
 
 `define OPVAR_CALL   'h0
 `define OPVAR_STOREW 'h1
@@ -154,8 +141,6 @@ wire nadcCS;
 `define OPVAR_RANDOM 'h7
 `define OPVAR_PUSH 'h8
 `define OPVAR_PULL 'h9
-`define OPVAR_GETTOUCH 'h1E
-`define OPVAR_BLIT1	'h1F
 
 `define PRINTEFFECT_FETCH		0
 `define PRINTEFFECT_FETCHAFTER	1
@@ -200,10 +185,6 @@ reg [15:0] random;
 reg [1:0] alphabet;
 reg [1:0] long;
 reg nextLoadIsDynamic;
-reg lastWriteWasDraw;
-
-reg adcClk;
-reg adcDin;
 
 reg [7:0] cachedReg;
 reg [15:0] cachedValue;
@@ -227,31 +208,25 @@ begin
 	phase=0;
 	readHigh=0;
 	nextLoadIsDynamic=0;
-	adcCS=0;
 	a17=0;
 	a18=0;
 	cachedReg=0;
 	cachedValue=0;
-	lastWriteWasDraw=0;
 end
 
 assign waddress[16:2] = address[16:2];
-assign waddress[0] = adcCS?adcClk:address[0];
-assign waddress[1] = adcCS?adcDin:address[1];
+assign waddress[0] = address[0];
+assign waddress[1] = address[1];
 assign data[5:0] = (writeEnable || printEnable)?dataOut[5:0]:6'bZ;
-assign data[6] = (writeEnable || printEnable)?dataOut[6]:((adcCS && operand[0][0])?0:'bZ);
-assign data[7] = (writeEnable || printEnable)?dataOut[7]:((adcCS && operand[0][1])?1:'bZ);
-assign romCS = !(!adcCS && !printEnable && !writeEnable && !forceDynamicRead && (forceStaticRead || address[16]==1));
-assign ramCS = !(!adcCS && !printEnable && (writeEnable || forceDynamicRead || (!forceStaticRead && address[16]==0)));
-assign pe = adcCS?(operand[0][3]?0:'bZ):(!printEnable || !clk);
+assign data[6] = (writeEnable || printEnable)?dataOut[6]:'bZ;
+assign data[7] = (writeEnable || printEnable)?dataOut[7]:'bZ;
+assign romCS = !(!printEnable && !writeEnable && !forceDynamicRead && (forceStaticRead || address[16]==1));
+assign ramCS = !(!printEnable && (writeEnable || forceDynamicRead || (!forceStaticRead && address[16]==0)));
+assign pe = (!printEnable || !clk);
 assign we = !writeEnable;
 assign led0 = !address[12];
 assign led1 = !address[13];
 assign led2 = !address[14];
-assign lcdCS = !printEnable || !clk;
-assign lcdRS = adcCS?(operand[0][2]?1:'bZ):rlcdRS;
-assign lcdReset = rlcdReset;
-assign nadcCS = !adcCS;
 
 task StoreB;
 	begin
@@ -718,96 +693,6 @@ task SRead;
 	end
 endtask
 
-task WriteReg;
-	begin
-		case (phase)
-			0: begin lastWriteWasDraw<=(operand[0]=='h22); if (operand[0]=='h22 && lastWriteWasDraw) begin rlcdRS<=1; phase<=4; end else begin rlcdRS<=0; phase<=phase+1; end end 
-			1: begin dataOut<=operand[0][15:8]; printEnable<=1; phase<=phase+1; end
-			2: begin dataOut<=operand[0][7:0]; if (operand[0]==0) phase<=4; else phase<=phase+1; end
-			3: begin rlcdRS<=1; printEnable<=0; phase<=phase+1; end
-			4: begin dataOut<=operand[1][15:8]; printEnable<=1; phase<=phase+1; end
-			5: begin dataOut<=operand[1][7:0]; phase<=phase+1; end
-			default: begin printEnable<=0; address<=pc; state<=`STATE_FETCH_OP; end
-		endcase
-	end
-endtask
-
-task Blit1;
-	begin
-		case (phase)
-			0: begin forceDynamicRead<=1; rlcdRS<=0; phase<=phase+1; end
-			1: begin dataOut<=0; printEnable<=1; phase<=phase+1; end
-			2: begin address<=operand[0]*2; dataOut<=34; returnValue<=0; phase<=phase+1; end
-			3: begin
-				rlcdRS<=1;
-				printEnable<=0;
-				if (operand[1]==0) begin
-					forceDynamicRead<=0;
-					address<=pc;
-					state<=`STATE_FETCH_OP;
-				end
-				phase<=phase+1;
-			end
-			4: begin
-				store<=data;
-				dataOut<=data[7]?operand[3][15:8]:operand[2][15:8];
-				printEnable<=1;
-				phase<=6;
-			end
-			5: begin
-				dataOut<=store[7]?operand[3][15:8]:operand[2][15:8];
-				printEnable<=1;
-				phase<=phase+1;
-			end
-			default: begin
-				dataOut<=store[7]?operand[3][7:0]:operand[2][7:0];
-				store[7:1]=store[6:0];
-				returnValue<=returnValue+1;
-				if (returnValue[2:0]==7) begin
-					operand[1]=operand[1]-1;
-					phase<=3;
-					address<=address+1;
-				end else begin
-					phase<=5;
-				end
-			end
-		endcase
-	end
-endtask
-
-task GetTouch;
-	begin
-		case (phase)
-			0: begin
-				adcCS<=1;
-				adcClk<=0;
-				adcDin<=1;
-				operand[1]<='hffff;
-			   operand[2]<=1;
-				phase<=1;
-			end
-			1: begin
-				operand[2][3:0]<=operand[2][3:0]+1;
-				if (operand[2][3:0]==0) begin			// Max clock rate for ADC is ~ 1MHz so divide our clock by 16
-					adcClk<=1;
-					operand[1]<=(operand[1]<<1)+adcDout;
-					phase<=(!operand[1][9])?3:2;
-				end
-			end
-			2: begin
-				operand[2][3:0]<=operand[2][3:0]+1;
-				if (operand[2][3:0]==0) begin			// Max clock rate for ADC is ~ 1MHz so divide our clock by 16
-					operand[0][8:4]<=(operand[0][8:4]>>1);
-					adcDin<=operand[0][4];
-					adcClk<=0;
-					phase<=1;
-				end
-			end
-			default: begin adcCS<=0; StoreResultSlow(operand[1]&'h3FF); end
-		endcase
-	end
-endtask
-
 task DoOp;
 	begin
 		case (operNum)
@@ -880,7 +765,6 @@ task DoOp;
 					`OP2_MUL: StoreResult($signed(operand[0])*$signed(operand[1]));
 					`OP2_DIV: begin store<=data; state=`STATE_DIVIDE; delayedBranch<=0; divideAddOne<=0; end
 					`OP2_MOD: begin store<=data; state=`STATE_DIVIDE; delayedBranch<=1; divideAddOne<=0; end
-					`OP2_WRITEREG: WriteReg();
 					default: state<=`STATE_HALT;
 				endcase
 			end
@@ -908,8 +792,6 @@ task DoOp;
 					`OPVAR_RANDOM: Random();
 					`OPVAR_PUSH: StoreRegisterAndBranch(0, operand[0], negate);
 					`OPVAR_PULL: Pull(0);
-					`OPVAR_GETTOUCH: GetTouch();
-					`OPVAR_BLIT1: Blit1();
 					default: state<=`STATE_HALT;
 				endcase
 			end
@@ -1001,7 +883,7 @@ begin
 		default: begin // `OP_VAR
 			pc<=pc+1;
 			case (op[4:0])
-				`OPVAR_CALL,`OPVAR_RANDOM,`OPVAR_GETTOUCH: state<=`STATE_READ_STORE;
+				`OPVAR_CALL,`OPVAR_RANDOM: state<=`STATE_READ_STORE;
 				default: state<=`STATE_DO_OP;
 			endcase
 		end
@@ -1024,7 +906,7 @@ begin
 				7: begin dataOut<=data; writeEnable<=1; phase<=8; end
 				8: begin writeEnable<=0; address<=address+1; if (address[15:0]=='hffff) phase<=9; else phase<=7; end
 				9: begin writeEnable<=1; dataOut<=0; address<=address+1; if (address[15:0]=='hffff) begin writeEnable<=0; phase<=10; end end
-				10: begin rlcdReset<=address[10]; rlcdRS<=1; printEnable<=0; address<=address+1; if (address[10:0]=='h7ff) phase<=11; end
+				10: begin printEnable<=0; address<=address+1; if (address[10:0]=='h7ff) phase<=11; end
 				default: begin
 					cachedReg<=15;
 					address<=pc;
@@ -1499,7 +1381,6 @@ endmodule
 module main();
 
 reg clk;
-reg adcDout;
 reg reset;
 wire [7:0] data;
 wire [16:0] address;
@@ -1510,10 +1391,6 @@ wire ramCS;
 wire led0;
 wire led1;
 wire led2;
-wire lcdCS;
-wire lcdRS;
-wire lcdReset;
-wire adcCS;
 wire a17;
 wire a18;
 
@@ -1532,7 +1409,6 @@ begin
 	$display("File read:%h %d", file, readData);
 	$fclose(file);
 	touch=$fopen("touch.txt","r");
-	adcDout=0;
 	reset=1;
 	numOps=0;
 	cycles=0;
@@ -1559,22 +1435,6 @@ begin
 			$display("Halt");
 			i=10000000;
 		end
-		if (b.operNum==`OP_VAR && b.op==`OPVAR_GETTOUCH && b.phase==0 && b.state==`STATE_DO_OP) begin
-			b.phase=3;
-			if ($fscanf(touch, "%d %d %d", touchX, touchY, touchZ)==-1) begin
-				i=10000000;
-			end
-			$display("Read: %d %d %d", touchX, touchY, touchZ);
-			case (b.operand[0])
-				'h93: b.operand[1]=touchZ;
-				'h95: b.operand[1]=touchX;
-				'h1A: b.operand[1]=touchY;
-				default: begin $display("Bad touch"); $finish; end
-			endcase
-		end
-		if (b.operNum==`OP_VAR && b.op==`OPVAR_BLIT1 && b.phase==0 && b.state==`STATE_DO_OP) begin
-			b.operand[1]=1;
-		end
 		//if (b.curPC<'h1e000)
 		begin
 			if (b.state==`STATE_FETCH_OP) begin
@@ -1587,7 +1447,7 @@ begin
 			end
 			stateCycles[b.state]=stateCycles[b.state]+1;
 		end
-		$display("Mem req: %h WE:%d PE:%d%d%d%d RoS:%d RaS:%d D:%h LEDs:%d%d%d ADC:%d%d%d%d%d%d%d Ops:%d/%d", address, !writeEnable, printEnable, lcdCS, lcdRS, lcdReset, !romCS, !ramCS, data, !led0, !led1, !led2, !adcCS, address[0], address[1], lcdRS, printEnable, data[7], data[6], numOps, cycles);
+		$display("Mem req: %h WE:%d PE:%d RoS:%d RaS:%d D:%h LEDs:%d%d%d Ops:%d/%d", address, !writeEnable, printEnable, !romCS, !ramCS, data, !led0, !led1, !led2, numOps, cycles);
 	end
 	for (i=0; i<16; i=i+1)
 		if (stateCycles[i]>0)
@@ -1619,6 +1479,6 @@ begin
 	$finish;
 end
 
-boss b(clk, adcDout, reset, data, address, writeEnable, printEnable, romCS, ramCS, led0, led1, led2, lcdCS, lcdRS, lcdReset, adcCS, a17, a18);
+boss b(clk, reset, data, address, writeEnable, printEnable, romCS, ramCS, led0, led1, led2, a17, a18);
 
 endmodule
