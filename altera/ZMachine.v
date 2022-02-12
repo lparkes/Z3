@@ -141,7 +141,6 @@ wire led2;
 `define PRINTEFFECT_RET1		2
 `define PRINTEFFECT_ABBREVRET	3
 
-reg forceStaticRead;
 reg forceDynamicRead;
 
 reg [3:0] state;
@@ -195,7 +194,6 @@ initial
 begin
 	state=`STATE_RESET;
 	forceDynamicRead=0;
-	forceStaticRead=0;
 	writeEnable=0;
 	printEnable=0;
 	phase=0;
@@ -210,8 +208,8 @@ assign waddress[1] = address[1];
 assign data[5:0] = (writeEnable || printEnable)?dataOut[5:0]:6'bZ;
 assign data[6] = (writeEnable || printEnable)?dataOut[6]:'bZ;
 assign data[7] = (writeEnable || printEnable)?dataOut[7]:'bZ;
-assign romCS = !(!printEnable && !writeEnable && !forceDynamicRead && (forceStaticRead || address[16]==1));
-assign ramCS = !(!printEnable && (writeEnable || forceDynamicRead || (!forceStaticRead && address[16]==0)));
+assign romCS = !(!printEnable && !writeEnable && !forceDynamicRead && address[16]==1);
+assign ramCS = !(!printEnable && (writeEnable || forceDynamicRead || address[16]==0));
 assign pe = (!printEnable || !clk);
 assign we = !writeEnable;
 assign led0 = !address[12];
@@ -884,7 +882,7 @@ begin
 	case(state)
 		`STATE_RESET: begin
 			case (phase)
-				0: begin printEnable<=0; random<=1; forceStaticRead<=1; address<='h6; phase<=phase+1; end
+				0: begin printEnable<=0; random<=1; address<='h6; phase<=phase+1; end
 				1: begin address<='h7; phase<=phase+1; pc[15:8]<=data; pc[16]<=0; end
 				2: begin address<='hA; phase<=phase+1; pc[7:0]<=data; end
 				3: begin address<='hB; phase<=phase+1; objectTable[15:8]<=data; end
@@ -898,7 +896,6 @@ begin
 				default: begin
 					cachedReg<=15;
 					address<=pc;
-					forceStaticRead<=0;
 					stackAddress<=64*1024/2;
 					csStack<=65*1024;
 					operand[0]<=`INIT_CALLBACK;
