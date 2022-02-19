@@ -1,4 +1,4 @@
-module boss(clk, reset, data, waddress, we, pe, ramCS, led0, led1, led2);
+module boss(clk, reset, data, waddress, we, led0, led1, led2, txd, romData, romHighAddr, romEnable);
 
 input clk;
 input reset;
@@ -7,24 +7,27 @@ inout [7:0] data;
 
 output [16:0] waddress;
 output we;
-output pe;
-output ramCS;
 output led0;
 output led1;
 output led2;
+output txd;
+
+input [7:0] romData;
+output [21:17] romHighAddr;
+output romEnable;
 
 reg [16:0] address;
 reg [7:0] dataOut;
-reg printEnable;
 reg writeEnable;
+reg [21:17] romHighAddr;
+reg romEnable;
 
 wire [16:0] waddress;
 wire we;
-wire pe;
-wire ramCS;
 wire led0;
 wire led1;
 wire led2;
+wire txd;
 
 
 //`define HARDWARE_PRINT
@@ -33,7 +36,7 @@ wire led2;
 `define CALLBACK_BASE		'h1E58B
 `define INIT_CALLBACK		'h0
 `define PRINT_CALLBACK		'h1
-`define PRINTCHAR_CALLBACK	'h2
+//`define PRINTCHAR_CALLBACK	'h2
 `define PRINTNUM_CALLBACK	'h3
 `define READ_CALLBACK		'h4
 `define STATUS_CALLBACK		'h5
@@ -139,6 +142,11 @@ wire led2;
 `define PRINTEFFECT_RET1		2
 `define PRINTEFFECT_ABBREVRET	3
 
+`define PROG0_HIGH_ADDR 	21'h8_0000 >> 17
+
+`define ZHEAD_FILE_LEN_MSB	17'h001a
+`define ZHEAD_FILE_LEN_LSB	17'h001b
+
 reg [3:0] state;
 reg [3:0] phase;
 
@@ -186,11 +194,26 @@ reg [15:0] cachedValue;
 // YP dataOut[7]
 // YM lcdWR
 
+
+
+txuartlite #(.CLOCKS_PER_BAUD(24'd10000000/19200)) uart
+  (
+   .i_clk(clk),
+   .i_wr(uart_stb),
+   .i_data(uart_out),
+   .o_uart_tx(txd),
+   .o_busy(uart_busy)
+   );
+
+reg [7:0]  uart_out;
+reg 	   uart_stb;
+wire 	   uart_busy;
+
+
 initial
 begin
 	state=`STATE_RESET;
 	writeEnable=0;
-	printEnable=0;
 	phase=0;
 	readHigh=0;
 	cachedReg=0;
@@ -200,14 +223,12 @@ end
 assign waddress[16:2] = address[16:2];
 assign waddress[0] = address[0];
 assign waddress[1] = address[1];
-assign data[5:0] = (writeEnable || printEnable)?dataOut[5:0]:6'bZ;
-assign data[6] = (writeEnable || printEnable)?dataOut[6]:'bZ;
-assign data[7] = (writeEnable || printEnable)?dataOut[7]:'bZ;
-assign ramCS = !(!printEnable && (writeEnable || address[16]==0));
-assign pe = (!printEnable || !clk);
+assign data[5:0] = writeEnable?dataOut[5:0]:6'bZ;
+assign data[6] = writeEnable?dataOut[6]:'bZ;
+assign data[7] = writeEnable?dataOut[7]:'bZ;
 assign we = !writeEnable;
-assign led0 = !address[12];
-assign led1 = !address[13];
+assign led0 = reset;
+assign led1 = reset;
 assign led2 = !address[14];
 
 task StoreB;
@@ -359,7 +380,7 @@ task SetAttr;
 		case (phase)
 			0: begin address<=GetObjectAddr(operand[0])+(operand[1]/8); phase<=phase+1; end
 			1: begin dataOut<=data|(1<<(7-(operand[1]&7))); writeEnable<=1; phase<=phase+1; end
-			default: begin writeEnable<=0; address<=pc; state=`STATE_FETCH_OP; end
+			default: begin writeEnable<=0; address<=pc; state<=`STATE_FETCH_OP; end
 		endcase
 	end
 endtask
@@ -369,7 +390,7 @@ task ClearAttr;
 		case (phase)
 			0: begin address<=GetObjectAddr(operand[0])+(operand[1]/8); phase<=phase+1; end
 			1: begin dataOut<=data&(~(1<<(7-(operand[1]&7)))); writeEnable<=1; phase<=phase+1; end
-			default: begin writeEnable<=0; address<=pc; state=`STATE_FETCH_OP; end
+			default: begin writeEnable<=0; address<=pc; state<=`STATE_FETCH_OP; end
 		endcase
 	end
 endtask
@@ -647,17 +668,10 @@ endtask
 task PrintChar;
 	input [7:0] char;
 	begin
-		$display("Print char: %d\n", char);
-`ifdef HARDWARE_PRINT
-		printEnable<=1;
-		dataOut<=char;
-		state<=`STATE_PRINT_CHAR;
-`else
-		operand[0]<=`PRINTCHAR_CALLBACK;
-		operand[1]<=char;
-		operTypes[1]<=`OPER_LARGE;
-		CallFunction(0, 1);
-`endif
+	   $display("Print char: %d\n", char);
+	   uart_out <= char;
+           uart_stb <= 1'b1;
+	   state<=`STATE_PRINT_CHAR;
 	end
 endtask
 
@@ -739,8 +753,8 @@ task DoOp;
 					`OP2_ADD: StoreResult($signed(operand[0])+$signed(operand[1]));
 					`OP2_SUB: StoreResult($signed(operand[0])-$signed(operand[1]));
 					`OP2_MUL: StoreResult($signed(operand[0])*$signed(operand[1]));
-					`OP2_DIV: begin store<=data; state=`STATE_DIVIDE; delayedBranch<=0; divideAddOne<=0; end
-					`OP2_MOD: begin store<=data; state=`STATE_DIVIDE; delayedBranch<=1; divideAddOne<=0; end
+					`OP2_DIV: begin store<=data; state<=`STATE_DIVIDE; delayedBranch<=0; divideAddOne<=0; end
+					`OP2_MOD: begin store<=data; state<=`STATE_DIVIDE; delayedBranch<=1; divideAddOne<=0; end
 					default: state<=`STATE_HALT;
 				endcase
 			end
@@ -869,28 +883,80 @@ endtask
 
 always @ (posedge clk)
 begin
+   if (!reset)
+   begin
+      phase <= 0;
+      state <= `STATE_RESET;
+   end
+   else
 	case(state)
 		`STATE_RESET: begin
 			case (phase)
-				0: begin printEnable<=0; random<=1; address<='h6; phase<=phase+1; end
-				1: begin address<='h7; phase<=phase+1; pc[15:8]<=data; pc[16]<=0; end
-				2: begin address<='hA; phase<=phase+1; pc[7:0]<=data; end
-				3: begin address<='hB; phase<=phase+1; objectTable[15:8]<=data; end
-				4: begin address<='hC; phase<=phase+1; objectTable[7:0]<=data; end
-				5: begin address<='hD; phase<=phase+1; globalsAddress[15:8]<=data; end
-				6: begin address<=0; phase<=phase+1; globalsAddress[7:0]<=data; end
-				7: begin dataOut<=data; writeEnable<=1; phase<=8; end
-				8: begin writeEnable<=0; address<=address+1; if (address[15:0]=='hffff) phase<=9; else phase<=7; end
-				9: begin writeEnable<=1; dataOut<=0; address<=address+1; if (address[15:0]=='hffff) begin writeEnable<=0; phase<=10; end end
-				10: begin printEnable<=0; address<=address+1; if (address[10:0]=='h7ff) phase<=11; end
+			  0:
+			    begin
+			       address <= 0;
+			       pc <= 19'h0_0040;
+			       romHighAddr <= `PROG0_HIGH_ADDR;
+			       romEnable <= 1;
+			       
+			       phase <= phase + 1;
+			    end
+			  1:
+			    begin
+			       dataOut <= romData;
+			       writeEnable <= 1;
+
+			       // We can update prog_size byte by byte because
+			       // it is stored big-endian in the file.
+			       if (address == `ZHEAD_FILE_LEN_MSB)
+				 pc[16:9] = romData;
+			       if (address == `ZHEAD_FILE_LEN_LSB)
+				 pc[8:1] = romData;
+
+			       phase <= 2;
+			    end
+			  2:
+			    begin
+			       address <= address + 1'b1;
+			       if (address < pc)
+				 phase <= 1;
+			       else
+				 begin
+				    writeEnable <= 0;
+				    phase <= 3;
+				 end
+			    end
+			  
+			  3: begin romEnable <=0; random<=1; address<='h6; phase<=phase+1; end
+				4: begin address<='h7; phase<=phase+1; pc[15:8]<=data; pc[16]<=0; end
+				5: begin address<='hA; phase<=phase+1; pc[7:0]<=data; end
+				6: begin address<='hB; phase<=phase+1; objectTable[15:8]<=data; end
+				7: begin address<='hC; phase<=phase+1; objectTable[7:0]<=data; end
+				8: begin address<='hD; phase<=phase+1; globalsAddress[15:8]<=data; end
+				9: begin address<=0; phase<=phase+1; globalsAddress[7:0]<=data; end
+			  
+				// 9: begin dataOut<=data; writeEnable<=1; phase<=10; end
+				// 10: begin writeEnable<=0; address<=address+1; if (address[15:0]=='hffff) phase<=11; else phase<=9; end
+				// 11: begin
+				//    writeEnable<=1;
+				//    dataOut<=0;
+				//    address<=address+1;
+				//    if (address[15:0]=='hffff)
+				//    begin
+				//       writeEnable<=0;
+				//       phase<=12;
+				//    end
+				// end
+				// 12: begin address<=address+1; if (address[10:0]=='h7ff) phase<=13; end
 				default: begin
 					cachedReg<=15;
 					address<=pc;
 					stackAddress<=64*1024/2;
 					csStack<=65*1024;
-					operand[0]<=`INIT_CALLBACK;
-					operTypes[1]<=`OPER_OMIT;
-					CallFunction(0, 1);
+					// operand[0]<=`INIT_CALLBACK;
+					// operTypes[1]<=`OPER_OMIT;
+					// CallFunction(0, 1);
+				   state <= `STATE_FETCH_OP;
 				end
 			endcase
 		end
@@ -902,10 +968,7 @@ begin
 				3: begin end // pointless phase but for some reason saves gates
 				4: begin address<=address+1; dataOut<=stackAddress[15:8]; phase<=phase+1; end
 				5: begin address<=address+1; dataOut<=stackAddress[7:0]; phase<=phase+1; end
-				6: begin address<=address+1; dataOut<=store; phase<=(operand[0][15:3]==0)?phase+1:10; end
-				7: begin address<=`CALLBACK_BASE+5*(operand[0]&7); writeEnable<=0; phase<=phase+1; end
-				8: begin address<=address+1; operand[0][15:8]<=data; phase<=phase+1; end
-				9: begin operand[0][7:0]<=data; phase<=phase+1; end
+				6: begin address<=address+1; dataOut<=store; phase<=phase+1; end
 				default: begin
 					cachedReg<=15;
 					csStack<=csStack+38;
@@ -914,6 +977,24 @@ begin
 					writeEnable<=0;
 					phase<=0;
 				end
+				// 0: begin $display("Call function %h", operand[0]*2); address<=csStack; writeEnable<=1; dataOut<=(delayedBranch<<2)|(negate<<1)|pc[16]; phase<=phase+1; end
+				// 1: begin address<=address+1; dataOut<=pc[15:8]; phase<=phase+1; end
+				// 2: begin address<=address+1; dataOut<=pc[7:0]; phase<=4; end
+				// 3: begin end // pointless phase but for some reason saves gates
+				// 4: begin address<=address+1; dataOut<=stackAddress[15:8]; phase<=phase+1; end
+				// 5: begin address<=address+1; dataOut<=stackAddress[7:0]; phase<=phase+1; end
+				// 6: begin address<=address+1; dataOut<=store; phase<=(operand[0][15:3]==0)?phase+1:10; end
+				// 7: begin address<=`CALLBACK_BASE+5*(operand[0]&7); writeEnable<=0; phase<=phase+1; end
+				// 8: begin address<=address+1; operand[0][15:8]<=data; phase<=phase+1; end
+				// 9: begin operand[0][7:0]<=data; phase<=phase+1; end
+				// default: begin
+				// 	cachedReg<=15;
+				// 	csStack<=csStack+38;
+				// 	address<=2*operand[0];
+				// 	state<=`STATE_READ_FUNCTION;
+				// 	writeEnable<=0;
+				// 	phase<=0;
+				// end
 			endcase
 		end
 		`STATE_RET_FUNCTION: begin
@@ -1213,7 +1294,7 @@ begin
 						operand[0]<=operand[0];
 `ifndef REAL_HARDWARE
 					if (operand[1]==0)
-						state=`STATE_HALT;
+						state<=`STATE_HALT;
 					else
 `endif
 					if ($signed(operand[1])<0)
@@ -1321,13 +1402,13 @@ begin
 			end
 `endif
 		end
-`ifdef HARDWARE_PRINT
-		`STATE_PRINT_CHAR: begin
-			address<=pc;
-			printEnable<=0;
-			state<=`STATE_FETCH_OP;
-		end
-`endif
+		`STATE_PRINT_CHAR:
+		  if (!uart_busy)
+		  begin
+		     uart_stb <= 1'b0;
+		     address<=pc;
+		     state<=`STATE_FETCH_OP;
+		  end
 		default: begin
 			$display("HALT");
 			operand[1]<=(pc>>1);
@@ -1352,31 +1433,32 @@ reg reset;
 wire [7:0] data;
 wire [16:0] address;
 wire writeEnable;
-wire printEnable;
-wire ramCS;
 wire led0;
 wire led1;
 wire led2;
+wire txd;
+wire [7:0] romData;
+wire [21:17] romHighAddr;
+wire 	     romEnable;
 
 integer file,readData,i,j,numOps,cycles,stateCycles[15:0],opCycles[255:0],ops[255:0];
-integer touch,touchX, touchY, touchZ;
-reg [7:0] mem [128*1024:0];
-reg [7:0] dynamicMem [128*1024:0];
+reg [7:0] rom [128*1024:0];
+reg [7:0] ram [128*1024:0];
 
-assign data= !ramCS ? (!writeEnable ? 8'bZ : dynamicMem[address] ) : 8'bZ;
+assign data= !writeEnable ? 8'bZ : ram[address];
+assign romData = rom[address];
 
 initial
 begin
 	$display("Welcome");
-	file=$fopen("rom.z3","rb");
-	readData=$fread(mem, file);
+	file=$fopen("../hello_world.z3","rb");
+	readData=$fread(rom, file);
 	$display("File read:%h %d", file, readData);
 	$fclose(file);
-	touch=$fopen("touch.txt","r");
 	reset=1;
 	numOps=0;
 	cycles=0;
-	mem['h1E57F]=1; // Suppress game select screen as it's slow
+
 	for (i=0; i<16; i=i+1)
 		stateCycles[i]=0;
 	for (i=0; i<256; i=i+1) begin
@@ -1387,8 +1469,9 @@ begin
 	for (i=0; i</*505*/10000000; i=i+1) begin
 		clk=1;
 		#5 clk=0;
-		if (!ramCS && !writeEnable) begin
-			dynamicMem[address]=data;
+	   
+		if ( !writeEnable) begin
+			ram[address]=data;
 		end
 `ifdef HARDWARE_PRINT
 		if (!printEnable) begin
@@ -1411,7 +1494,7 @@ begin
 			end
 			stateCycles[b.state]=stateCycles[b.state]+1;
 		end
-		$display("Mem req: %h WE:%d PE:%d RaS:%d D:%h LEDs:%d%d%d Ops:%d/%d", address, !writeEnable, printEnable, !ramCS, data, !led0, !led1, !led2, numOps, cycles);
+		$display("Mem req: %h WE:%d D:%h LEDs:%d%d%d Ops:%d/%d", address, !writeEnable, data, !led0, !led1, !led2, numOps, cycles);
 	end
 	for (i=0; i<16; i=i+1)
 		if (stateCycles[i]>0)
@@ -1423,26 +1506,25 @@ begin
 	for (i=0; i<'h20000; i=i+16) begin
 		$fwrite(file, "%05h: ", i);
 		for (j=0; j<16; j=j+2)
-			$fwrite(file, "%02x%02x ", dynamicMem[i+j][7:0], dynamicMem[i+j+1][7:0]);
+			$fwrite(file, "%02x%02x ", ram[i+j][7:0], ram[i+j+1][7:0]);
 		for (j=0; j<16; j=j+1)
-			$fwrite(file, "%c", (dynamicMem[i+j][7:0]>=32)?dynamicMem[i+j][7:0]:46);
+			$fwrite(file, "%c", (ram[i+j][7:0]>=32)?ram[i+j][7:0]:46);
 		$fwrite(file, "\n");
 	end
 	$fwrite(file, "\nBitmap:\n");
 	for (i='h1b500; i<'h20000; i=i+30) begin
 		for (j=0; j<30; j=j+1)
 			$fwrite(file, "%d%d%d%d%d%d%d%d",
-		dynamicMem[i+j][7], dynamicMem[i+j][6],
-		dynamicMem[i+j][5], dynamicMem[i+j][4],
-		dynamicMem[i+j][3], dynamicMem[i+j][2],
-		dynamicMem[i+j][1], dynamicMem[i+j][0]);
+		ram[i+j][7], ram[i+j][6],
+		ram[i+j][5], ram[i+j][4],
+		ram[i+j][3], ram[i+j][2],
+		ram[i+j][1], ram[i+j][0]);
 		$fwrite(file, "\n");
 	end
 	$fclose(file);
-	$fclose(touch);
 	$finish;
 end
 
-boss b(clk, reset, data, address, writeEnable, printEnable, ramCS, led0, led1, led2);
+boss b(clk, reset, data, address, writeEnable, led0, led1, led2, txd, romData, romHighAddr, romEnable);
 
 endmodule
